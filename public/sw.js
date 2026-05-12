@@ -5,7 +5,7 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()))
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url)
-  if (url.hostname !== 'data.imtorrr.xyz') return  // only cache data requests
+  if (url.hostname !== 'data.imtorrr.xyz') return
 
   e.respondWith(
     caches.open(CACHE).then(async cache => {
@@ -13,7 +13,8 @@ self.addEventListener('fetch', e => {
       if (cached) return cached
 
       const response = await fetch(e.request)
-      if (response.status === 206 || response.status === 200) {
+      // Cache API rejects 206 — only cache full 200 responses
+      if (response.status === 200) {
         cache.put(e.request, response.clone())
       }
       return response

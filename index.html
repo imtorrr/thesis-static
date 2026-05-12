@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forest Point Cloud Viewer — NCCE31 Thesis</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar Controls -->
+    <aside id="sidebar">
+      <header class="sidebar-header">
+        <div class="header-row">
+          <h1>Forest LiDAR</h1>
+          <button id="help-btn" class="btn-icon" title="Help">?</button>
+        </div>
+        <p class="subtitle">NCCE31 Thesis · Semantic Segmentation</p>
+      </header>
+
+      <!-- Forest Selection -->
+      <section class="control-group">
+        <label class="group-label">Forest Plot</label>
+        <div class="btn-group" id="forest-btns">
+          <button class="btn-toggle active" data-value="benchapan">Mixed Deciduous</button>
+          <button class="btn-toggle" data-value="diplang">Dry Evergreen</button>
+          <button class="btn-toggle" data-value="tengrung">Dry Dipterocarp</button>
+        </div>
+      </section>
+
+      <!-- Training Type -->
+      <section class="control-group">
+        <label class="group-label">Training Setup</label>
+        <div class="btn-group" id="training-btns">
+          <button class="btn-toggle" data-value="pretrained">Pretrained</button>
+          <button class="btn-toggle active" data-value="fine-tune-encoder">Fine-tuned</button>
+        </div>
+      </section>
+
+      <!-- Feature Set -->
+      <section class="control-group">
+        <label class="group-label">Input Features</label>
+        <div class="btn-group" id="feature-btns">
+          <button class="btn-toggle active" data-value="xyz">XYZ</button>
+          <button class="btn-toggle" data-value="hag">XYZ + HAG</button>
+        </div>
+      </section>
+
+      <!-- Model Selection -->
+      <section class="control-group">
+        <label class="group-label">Model</label>
+        <div class="select-wrap">
+          <select id="model-select">
+            <option value="pointnet++">PointNet++ (Vanilla)</option>
+            <option value="fsct">PointNet++ (Modified)</option>
+            <option value="pointnext-s">PointNeXt-S</option>
+            <option value="pointnext-l" selected>PointNeXt-L</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Classification Filter -->
+      <section class="control-group">
+        <label class="group-label">Classification Filter</label>
+        <div class="filter-list">
+          <label class="filter-item">
+            <input type="checkbox" class="cls-check" data-code="1" checked>
+            <span class="cls-dot" style="background:#C19A6B"></span>
+            Ground
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" class="cls-check" data-code="2" checked>
+            <span class="cls-dot" style="background:#E74C3C"></span>
+            Stem
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" class="cls-check" data-code="3" checked>
+            <span class="cls-dot" style="background:#27AE60"></span>
+            Vegetation
+          </label>
+        </div>
+      </section>
+
+      <!-- Reset View -->
+      <section class="control-group">
+        <button id="reset-view" class="btn-reset-view">&#8635; Reset View</button>
+      </section>
+
+      <!-- Split Direction -->
+      <section class="control-group">
+        <label class="group-label">Compare Layout</label>
+        <div class="btn-group" id="split-btns">
+          <button class="btn-toggle active" data-value="vertical" title="Side by side">⬜ Vertical</button>
+          <button class="btn-toggle" data-value="horizontal" title="Top and bottom">⬛ Horizontal</button>
+        </div>
+      </section>
+
+      <!-- Point Size -->
+      <section class="control-group">
+        <label class="group-label">Point Size <span id="pt-size-val">2</span>px</label>
+        <input type="range" id="pt-size" min="1" max="6" step="0.5" value="2">
+      </section>
+
+      <!-- EDL -->
+      <section class="control-group">
+        <label class="group-label">
+          Eye-Dome Lighting
+          <label class="toggle-switch">
+            <input type="checkbox" id="edl-toggle" checked>
+            <span class="toggle-track"></span>
+          </label>
+        </label>
+        <div id="edl-params">
+          <label class="group-label" style="margin-top:8px">Strength <span id="edl-str-val">0.1</span></label>
+          <input type="range" id="edl-strength" min="0.05" max="2" step="0.05" value="0.1">
+          <label class="group-label" style="margin-top:6px">Radius <span id="edl-rad-val">1.5</span>px</label>
+          <input type="range" id="edl-radius" min="0.5" max="4" step="0.25" value="1.5">
+        </div>
+      </section>
+
+      <!-- Status -->
+      <div id="status-area">
+        <div id="status-gt" class="status-item">
+          <span class="status-dot loading"></span>
+          <span class="status-label">Ground Truth</span>
+        </div>
+        <div id="status-pred" class="status-item">
+          <span class="status-dot loading"></span>
+          <span class="status-label">Prediction</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Viewer Area -->
+    <main id="viewer-area" class="split-vertical">
+      <div id="pane-left" class="pane">
+        <div class="pane-label">Ground Truth</div>
+        <canvas id="canvas-gt"></canvas>
+        <div class="loading-overlay" id="overlay-gt">
+          <div class="spinner"></div>
+          <span>Loading ground truth…</span>
+        </div>
+      </div>
+
+      <div id="split-handle" class="split-handle"></div>
+
+      <div id="pane-right" class="pane">
+        <div class="pane-label" id="pred-label">Model Prediction</div>
+        <canvas id="canvas-pred"></canvas>
+        <div class="loading-overlay" id="overlay-pred">
+          <div class="spinner"></div>
+          <span>Loading prediction…</span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Help Modal -->
+  <div id="help-modal" class="modal-overlay">
+    <div class="modal">
+      <h2 class="modal-title">Forest LiDAR Viewer</h2>
+      <p class="modal-subtitle">NCCE31 Thesis · Semantic Segmentation of Thai Forest Plots</p>
+
+      <div class="modal-section">
+        <h3>Camera Controls</h3>
+        <table class="controls-table">
+          <tr><td>Left drag</td><td>Rotate</td></tr>
+          <tr><td>Right drag</td><td>Pan</td></tr>
+          <tr><td>Scroll wheel</td><td>Zoom</td></tr>
+          <tr><td>Double click</td><td>Set rotation center</td></tr>
+        </table>
+      </div>
+
+      <div class="modal-section">
+        <h3>How to Use</h3>
+        <p>Select a forest plot, model, and feature set. The left pane shows ground truth labels; the right pane shows model predictions. Drag the center divider to resize panes. Both cameras are synchronized — navigating one mirrors the other.</p>
+      </div>
+
+      <div class="modal-section">
+        <h3>Forest Plots</h3>
+        <table class="controls-table">
+          <tr><td>Mixed Deciduous</td><td>Benchapan</td></tr>
+          <tr><td>Dry Evergreen</td><td>Diplang</td></tr>
+          <tr><td>Dry Dipterocarp</td><td>Tengrung</td></tr>
+        </table>
+      </div>
+
+      <button id="help-close" class="btn-primary">Got it</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

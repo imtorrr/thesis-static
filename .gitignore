@@ -1,0 +1,9 @@
+._*
+.DS_Store
+node_modules/
+dist/
+public/data/
+data/
+.env
+.env.local
+.env.production

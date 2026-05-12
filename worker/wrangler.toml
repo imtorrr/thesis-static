@@ -1,0 +1,13 @@
+name = "thesis-data-worker"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Routes — worker handles all requests to this subdomain
+routes = [
+  { pattern = "data.imtorrr.xyz/*", zone_name = "imtorrr.xyz" }
+]
+
+# Bind to your private R2 bucket
+[[r2_buckets]]
+binding    = "BUCKET"
+bucket_name = "thesis-lidar"

@@ -61,29 +61,52 @@ export class LoadedCloud {
   }
 }
 
+// ─── Octree helpers ───────────────────────────────────────────────────────────
+
+function nodeBox(key, header, cx, cy, cz) {
+  const [d, nx, ny, nz] = key.split('-').map(Number)
+  const divs = Math.pow(2, d)
+  const sx = (header.max[0] - header.min[0]) / divs
+  const sy = (header.max[1] - header.min[1]) / divs
+  const sz = (header.max[2] - header.min[2]) / divs
+  return new THREE.Box3(
+    new THREE.Vector3(header.min[0] + sx * nx - cx,       header.min[1] + sy * ny - cy,       header.min[2] + sz * nz - cz),
+    new THREE.Vector3(header.min[0] + sx * (nx+1) - cx,   header.min[1] + sy * (ny+1) - cy,   header.min[2] + sz * (nz+1) - cz)
+  )
+}
+
+function angularSize(box, camera) {
+  const sphere = new THREE.Sphere()
+  box.getBoundingSphere(sphere)
+  const dist = Math.max(0.001, camera.position.distanceTo(sphere.center) - sphere.radius)
+  return 2 * Math.atan(sphere.radius / dist)  // radians
+}
+
 // ─── Cache ────────────────────────────────────────────────────────────────────
-const _cache = new Map() // absUrl → Promise<LoadedCloud>
+const _cache = new Map() // cacheKey → Promise<LoadedCloud>
 
 export function clearCopcCache() { _cache.clear() }
 
 // ─── Main API ─────────────────────────────────────────────────────────────────
 export async function loadCopc(url, opts = {}) {
-  const { maxDepth = 8, onFirstRender, onProgress } = opts
+  const { maxDepth = 8, camera, minAngle = 0.005, onFirstRender, onProgress } = opts
   const absUrl = toAbsUrl(url)
 
-  if (_cache.has(absUrl)) {
-    const cloud = await _cache.get(absUrl)
+  // Cache key includes view params so different camera angles get fresh loads
+  const cacheKey = absUrl
+  if (_cache.has(cacheKey)) {
+    const cloud = await _cache.get(cacheKey)
     onFirstRender?.(cloud)
     onProgress?.(1, cloud)
     return cloud
   }
 
-  const promise = _loadFresh(absUrl, maxDepth, onFirstRender, onProgress)
-  _cache.set(absUrl, promise)
+  const promise = _loadFresh(absUrl, maxDepth, camera, minAngle, onFirstRender, onProgress)
+  _cache.set(cacheKey, promise)
   return promise
 }
 
-async function _loadFresh(absUrl, maxDepth, onFirstRender, onProgress) {
+async function _loadFresh(absUrl, maxDepth, camera, minAngle, onFirstRender, onProgress) {
 
   const [copc, lazPerf] = await Promise.all([Copc.create(absUrl), getLazPerf()])
   const { header, info } = copc
@@ -94,11 +117,45 @@ async function _loadFresh(absUrl, maxDepth, onFirstRender, onProgress) {
 
   const { nodes } = await Copc.loadHierarchyPage(absUrl, info.rootHierarchyPage)
 
-  const entries = Object.entries(nodes)
+  // Estimate ideal view distance from cloud bounds (independent of current camera state)
+  // Mirrors fitToCloud logic: place camera far enough to see the whole cloud
+  const size = [header.max[0]-header.min[0], header.max[1]-header.min[1], header.max[2]-header.min[2]]
+  const fovRad = ((camera?.fov ?? 55) * Math.PI) / 180
+  const aspect = camera?.aspect ?? 1
+  const hFov   = 2 * Math.atan(Math.tan(fovRad / 2) * aspect)
+  const refDist = Math.max(
+    (size[2] / 2) / Math.tan(fovRad / 2),
+    (size[0] / 2) / Math.tan(hFov  / 2)
+  ) * 1.5
+
+  // Build frustum from camera for behind-camera culling only
+  let frustum = null
+  if (camera) {
+    camera.updateMatrixWorld()
+    camera.updateProjectionMatrix()
+    frustum = new THREE.Frustum()
+    frustum.setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    )
+  }
+
+  const allEntries = Object.entries(nodes)
     .filter(([key, node]) => node && node.pointCount > 0 && parseInt(key, 10) <= maxDepth)
     .sort(([a], [b]) => parseInt(a, 10) - parseInt(b, 10))  // coarse first
 
-  // Pre-allocate per-class buffers sized to total point count
+  // LOD filter using reference distance — always keep depth-0 root
+  const refCamera = { position: new THREE.Vector3(0, -refDist, 0) }
+  const entries = allEntries.filter(([key]) => {
+    const depth = parseInt(key.split('-')[0])
+    if (depth === 0) return true
+    const box = nodeBox(key, header, cx, cy, cz)
+    if (frustum && !frustum.intersectsBox(box)) return false
+    return angularSize(box, refCamera) >= minAngle
+  })
+
+  console.log(`[copc] ${entries.length}/${allEntries.length} nodes after frustum+LOD cull`)
+
+  // Pre-allocate per-class buffers — size to filtered set to avoid huge unused allocations
   const totalPts = entries.reduce((s, [, n]) => s + n.pointCount, 0)
 
   const bufs = {}

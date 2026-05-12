@@ -61,7 +61,7 @@ async function loadCloud(viewer, url, overlayEl, statusEl, label, fitCamera = tr
 
   try {
     await loadCopc(url, {
-      maxDepth: 8,
+      maxDepth: 2,
 
       onFirstRender: (cloud) => {
         // Show the viewer as soon as depth-0 is ready — before full load

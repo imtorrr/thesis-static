@@ -1,8 +1,4 @@
 import { createViewers } from './viewer.js'
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js')
-}
 import { loadCopc } from './copc-loader.js'
 import { getGroundTruthUrl, getPredictionUrl, CLASSES } from './config.js'
 

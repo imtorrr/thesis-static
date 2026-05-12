@@ -1,5 +1,6 @@
 const ALLOWED_ORIGINS = [
   'https://thesis.imtorrr.xyz',
+  'https://thesis-static.pages.dev',
   'http://localhost:5173',
   'http://localhost:4173',
 ]

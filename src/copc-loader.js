@@ -34,10 +34,17 @@ function toAbsUrl(url) {
 
 // ─── LoadedCloud ──────────────────────────────────────────────────────────────
 export class LoadedCloud {
-  /** @param {THREE.Group} group @param {Record<number, THREE.Points>} classPoints */
-  constructor(group, classPoints) {
+  /**
+   * @param {THREE.Group} group
+   * @param {Record<number, THREE.Points>} classPoints
+   * @param {Float32Array} rawPositions  flat xyz, centered, length = n*3
+   * @param {Uint8Array}   rawClasses    classification per point, length = n
+   */
+  constructor(group, classPoints, rawPositions, rawClasses) {
     this.group = group
     this._pts = classPoints
+    this.rawPositions = rawPositions
+    this.rawClasses   = rawClasses
   }
 
   setVisibleClasses(visSet) {
@@ -184,7 +191,12 @@ async function _loadFresh(absUrl, maxDepth, camera, minAngle, onFirstRender, onP
     classPoints[cls] = pts
   }
 
-  const cloud = new LoadedCloud(group, classPoints)
+  // Raw flat buffers for diff comparison (same centred coords as class buffers)
+  const rawPositions = new Float32Array(totalPts * 3)
+  const rawClasses   = new Uint8Array(totalPts)
+  let rawCount = 0
+
+  const cloud = new LoadedCloud(group, classPoints, rawPositions, rawClasses)
   let firstRenderDone = false
 
   for (let i = 0; i < entries.length; i++) {
@@ -200,11 +212,19 @@ async function _loadFresh(absUrl, maxDepth, camera, minAngle, onFirstRender, onP
         const cls = getCls(j)
         const b = bufs[cls]
         if (!b) continue
+        const x = getX(j) - cx
+        const y = getY(j) - cy
+        const z = getZ(j) - cz
         const k = b.count
-        b.posArr[k * 3]     = getX(j) - cx
-        b.posArr[k * 3 + 1] = getY(j) - cy
-        b.posArr[k * 3 + 2] = getZ(j) - cz
+        b.posArr[k * 3]     = x
+        b.posArr[k * 3 + 1] = y
+        b.posArr[k * 3 + 2] = z
         b.count++
+        rawPositions[rawCount * 3]     = x
+        rawPositions[rawCount * 3 + 1] = y
+        rawPositions[rawCount * 3 + 2] = z
+        rawClasses[rawCount] = cls
+        rawCount++
       }
     } catch (err) {
       console.warn(`[copc] skipped node ${key}:`, err.message)
@@ -216,6 +236,8 @@ async function _loadFresh(absUrl, maxDepth, camera, minAngle, onFirstRender, onP
       b.geo.setDrawRange(0, b.count)
       b.posAttr.needsUpdate = true
     }
+    // Expose current raw count so diff can be built incrementally if needed
+    cloud.rawCount = rawCount
 
     // Notify caller so they can show the viewer as soon as depth-0 renders
     if (!firstRenderDone) {
@@ -226,5 +248,9 @@ async function _loadFresh(absUrl, maxDepth, camera, minAngle, onFirstRender, onP
     onProgress?.((i + 1) / entries.length, cloud)
   }
 
+  // Trim raw buffers to actual point count
+  cloud.rawPositions = rawPositions.subarray(0, rawCount * 3)
+  cloud.rawClasses   = rawClasses.subarray(0, rawCount)
+  cloud.rawCount     = rawCount
   return cloud
 }

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#2B2622"/>
+  <!-- point cloud tree: vegetation dots -->
+  <circle cx="16" cy="7"  r="2.2" fill="#27AE60"/>
+  <circle cx="11" cy="13" r="2.2" fill="#27AE60"/>
+  <circle cx="21" cy="13" r="2.2" fill="#27AE60"/>
+  <circle cx="8"  cy="19" r="2.2" fill="#27AE60"/>
+  <circle cx="16" cy="19" r="2.2" fill="#27AE60"/>
+  <circle cx="24" cy="19" r="2.2" fill="#27AE60"/>
+  <!-- stem -->
+  <rect x="14.5" y="23" width="3" height="5" rx="1" fill="#C19A6B"/>
+  <!-- ground dots -->
+  <circle cx="10" cy="29" r="1.4" fill="#C19A6B"/>
+  <circle cx="16" cy="29" r="1.4" fill="#C19A6B"/>
+  <circle cx="22" cy="29" r="1.4" fill="#C19A6B"/>
+</svg>

@@ -3,8 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Forest Point Cloud Viewer — NCCE31 Thesis</title>
+  <title>Natapong's Thesis — Tree Semantic Segmentation of Handheld LiDAR Point Clouds</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -12,10 +17,10 @@
     <aside id="sidebar">
       <header class="sidebar-header">
         <div class="header-row">
-          <h1>Forest LiDAR</h1>
-          <button id="help-btn" class="btn-icon" title="Help">?</button>
+          <h1>Natapong's Thesis Result</h1>
+          <button id="help-btn" class="btn-icon" title="Help"><i data-lucide="help-circle"></i></button>
         </div>
-        <p class="subtitle">NCCE31 Thesis · Semantic Segmentation</p>
+        <p class="subtitle">Handheld LiDAR · Forest Restoration Plots</p>
       </header>
 
       <!-- Forest Selection -->
@@ -81,17 +86,33 @@
         </div>
       </section>
 
-      <!-- Reset View -->
+      <!-- Camera Controls -->
       <section class="control-group">
-        <button id="reset-view" class="btn-reset-view">&#8635; Reset View</button>
+        <label class="group-label">Camera Controls</label>
+        <div class="camera-controls">
+          <div class="cam-row"><span class="cam-key"><i data-lucide="mouse-pointer-2"></i> Left drag</span><span class="cam-val">Rotate</span></div>
+          <div class="cam-row"><span class="cam-key"><i data-lucide="move"></i> Right drag</span><span class="cam-val">Pan</span></div>
+          <div class="cam-row"><span class="cam-key"><i data-lucide="scroll"></i> Scroll</span><span class="cam-val">Zoom</span></div>
+          <div class="cam-row"><span class="cam-key"><i data-lucide="mouse-pointer-click"></i> Dbl click</span><span class="cam-val">Set pivot</span></div>
+        </div>
+        <button id="reset-view" class="btn-reset-view" style="margin-top:10px"><i data-lucide="rotate-ccw"></i> Reset View</button>
+      </section>
+
+      <!-- View Mode -->
+      <section class="control-group">
+        <label class="group-label">View Mode</label>
+        <div class="btn-group" id="mode-btns">
+          <button class="btn-toggle active" data-value="split"><i data-lucide="layout-panel-left"></i> Split</button>
+          <button class="btn-toggle" data-value="overlay"><i data-lucide="layers-2"></i> Overlay</button>
+        </div>
       </section>
 
       <!-- Split Direction -->
       <section class="control-group">
         <label class="group-label">Compare Layout</label>
         <div class="btn-group" id="split-btns">
-          <button class="btn-toggle active" data-value="vertical" title="Side by side">⬜ Vertical</button>
-          <button class="btn-toggle" data-value="horizontal" title="Top and bottom">⬛ Horizontal</button>
+          <button class="btn-toggle active" data-value="vertical" title="Side by side"><i data-lucide="columns-2"></i> Vertical</button>
+          <button class="btn-toggle" data-value="horizontal" title="Top and bottom"><i data-lucide="rows-2"></i> Horizontal</button>
         </div>
       </section>
 
@@ -128,13 +149,16 @@
           <span class="status-dot loading"></span>
           <span class="status-label">Prediction</span>
         </div>
+        <div class="data-credit">
+          Data provided by <a href="https://www.skyviv.com/" target="_blank" rel="noopener">Skyviv</a>
+        </div>
       </div>
     </aside>
 
     <!-- Viewer Area -->
     <main id="viewer-area" class="split-vertical">
       <div id="pane-left" class="pane">
-        <div class="pane-label">Ground Truth</div>
+        <div id="pane-label-gt" class="pane-label">Ground Truth</div>
         <canvas id="canvas-gt"></canvas>
         <div class="loading-overlay" id="overlay-gt">
           <div class="spinner"></div>
@@ -143,6 +167,10 @@
       </div>
 
       <div id="split-handle" class="split-handle"></div>
+
+      <div id="overlay-divider" class="overlay-divider" style="display:none">
+        <div class="overlay-handle"><i data-lucide="chevrons-left-right"></i></div>
+      </div>
 
       <div id="pane-right" class="pane">
         <div class="pane-label" id="pred-label">Model Prediction</div>
@@ -158,8 +186,8 @@
   <!-- Help Modal -->
   <div id="help-modal" class="modal-overlay">
     <div class="modal">
-      <h2 class="modal-title">Forest LiDAR Viewer</h2>
-      <p class="modal-subtitle">NCCE31 Thesis · Semantic Segmentation of Thai Forest Plots</p>
+      <h2 class="modal-title">Natapong's Thesis Result</h2>
+      <p class="modal-subtitle">Tree Semantic Segmentation of Handheld LiDAR Point Clouds Using Deep Learning — A Case Study of Forest Restoration Plots</p>
 
       <div class="modal-section">
         <h3>Camera Controls</h3>
@@ -190,5 +218,6 @@
   </div>
 
   <script type="module" src="src/main.js"></script>
+  <script>lucide.createIcons();</script>
 </body>
 </html>

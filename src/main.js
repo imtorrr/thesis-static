@@ -1,6 +1,6 @@
 import { createViewers } from './viewer.js'
 import { loadCopc } from './copc-loader.js'
-import { getGroundTruthUrl, getPredictionUrl, CLASSES } from './config.js'
+import { getGroundTruthUrl, getPredictionUrl } from './config.js'
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -12,21 +12,23 @@ const state = {
   visibleClasses: new Set([1, 2, 3]),
   splitDir: 'vertical',
   pointSize: 2,
+  viewMode: 'split',
 }
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
-const viewerArea  = document.getElementById('viewer-area')
-const paneLeft    = document.getElementById('pane-left')
-const paneRight   = document.getElementById('pane-right')
-const splitHandle = document.getElementById('split-handle')
-const canvasGt    = document.getElementById('canvas-gt')
-const canvasPred  = document.getElementById('canvas-pred')
-const overlayGt   = document.getElementById('overlay-gt')
-const overlayPred = document.getElementById('overlay-pred')
-const statusGt    = document.getElementById('status-gt')
-const statusPred  = document.getElementById('status-pred')
-const predLabel   = document.getElementById('pred-label')
+const viewerArea     = document.getElementById('viewer-area')
+const paneLeft       = document.getElementById('pane-left')
+const paneRight      = document.getElementById('pane-right')
+const splitHandle    = document.getElementById('split-handle')
+const canvasGt       = document.getElementById('canvas-gt')
+const canvasPred     = document.getElementById('canvas-pred')
+const overlayGt      = document.getElementById('overlay-gt')
+const overlayPred    = document.getElementById('overlay-pred')
+const statusGt       = document.getElementById('status-gt')
+const statusPred     = document.getElementById('status-pred')
+const predLabel      = document.getElementById('pred-label')
+const overlayDivider = document.getElementById('overlay-divider')
 
 // ─── Viewers ──────────────────────────────────────────────────────────────────
 
@@ -34,55 +36,41 @@ const { v1, v2 } = createViewers(canvasGt, canvasPred)
 
 // ─── Loading helpers ──────────────────────────────────────────────────────────
 
-function setStatus(el, state) {
-  const dot = el.querySelector('.status-dot')
-  dot.className = `status-dot ${state}`
+function setStatus(el, s) {
+  el.querySelector('.status-dot').className = `status-dot ${s}`
 }
 
-function showOverlay(overlayEl, msg) {
-  overlayEl.querySelector('span').textContent = msg
-  overlayEl.classList.remove('hidden')
+function showOverlay(el, msg) {
+  el.querySelector('span').textContent = msg
+  el.classList.remove('hidden')
 }
 
-function hideOverlay(overlayEl) {
-  overlayEl.classList.add('hidden')
-}
+function hideOverlay(el) { el.classList.add('hidden') }
 
-let loadingGt = false
-let loadingPred = false
-let currentGtUrl = null
+let currentGtUrl   = null
 let currentPredUrl = null
 
 async function loadCloud(viewer, url, overlayEl, statusEl, label, fitCamera = true) {
   if (!url) return
-
   showOverlay(overlayEl, `Loading ${label}…`)
   setStatus(statusEl, 'loading')
-
   try {
     await loadCopc(url, {
       maxDepth: 2,
-
       onFirstRender: (cloud) => {
-        // Show the viewer as soon as depth-0 is ready — before full load
         cloud.setVisibleClasses(state.visibleClasses)
         cloud.setPointSize(state.pointSize)
         viewer.setCloud(cloud, fitCamera)
         setStatus(statusEl, 'ready')
         hideOverlay(overlayEl)
       },
-
       onProgress: (f) => {
-        // Update status label with streaming progress (overlay already hidden)
         const pct = Math.round(f * 100)
         statusEl.querySelector('.status-label').textContent =
           pct < 100 ? `${label} ${pct}%` : label
       },
     })
-
-    // Restore clean label when fully done
     statusEl.querySelector('.status-label').textContent = label
-
   } catch (err) {
     console.error('[load]', url, err)
     setStatus(statusEl, 'error')
@@ -95,7 +83,6 @@ function loadGroundTruth() {
   if (url === currentGtUrl) return
   currentGtUrl = url
   loadCloud(v1, url, overlayGt, statusGt, 'Ground Truth', true)
-  // onFirstRender triggers fitCamera on v1; OrbitControls sync propagates to v2 automatically
 }
 
 function loadPrediction() {
@@ -103,21 +90,83 @@ function loadPrediction() {
   if (url === currentPredUrl) return
   currentPredUrl = url
   updatePredLabel()
-  // Don't fit camera for pred — GT drives position; sync copies it after GT loads
   loadCloud(v2, url, overlayPred, statusPred, 'Prediction', false)
 }
 
 function updatePredLabel() {
-  const modelName = document.querySelector('#model-select option[value="' + state.model + '"]')?.textContent ?? state.model
-  const featureLabel = state.feature === 'xyz' ? 'XYZ' : 'XYZ+HAG'
-  const trainingLabel = state.training === 'pretrained' ? 'Pretrained' : 'Fine-tuned'
-  predLabel.textContent = `${modelName} · ${featureLabel} · ${trainingLabel}`
+  const modelName  = document.querySelector(`#model-select option[value="${state.model}"]`)?.textContent ?? state.model
+  const featLabel  = state.feature === 'xyz' ? 'XYZ' : 'XYZ+HAG'
+  const trainLabel = state.training === 'pretrained' ? 'Pretrained' : 'Fine-tuned'
+  predLabel.textContent = `${modelName} · ${featLabel} · ${trainLabel}`
 }
 
-function loadBoth() {
-  loadGroundTruth()
-  loadPrediction()
+function loadBoth() { loadGroundTruth(); loadPrediction() }
+
+// ─── Overlay mode (before/after curtain) ──────────────────────────────────────
+
+let overlayFrac     = 0.5
+let overlayDragging = false
+
+function setOverlayClip(frac) {
+  overlayFrac = Math.max(0.02, Math.min(0.98, frac))
+  const pct    = (overlayFrac * 100).toFixed(2)
+  const invPct = ((1 - overlayFrac) * 100).toFixed(2)
+  // GT on left, clipped on right edge
+  paneLeft.style.clipPath  = `inset(0 ${invPct}% 0 0)`
+  // Pred on right, clipped on left edge
+  paneRight.style.clipPath = `inset(0 0 0 ${pct}%)`
+  overlayDivider.style.left = `${pct}%`
 }
+
+function applyViewMode(mode) {
+  if (mode === 'split') {
+    viewerArea.classList.remove('overlay-mode')
+    paneLeft.style.clipPath        = ''
+    paneRight.style.clipPath       = ''
+    paneLeft.style.flex            = '1 1 0'
+    paneRight.style.flex           = '1 1 0'
+    splitHandle.style.display      = ''
+    overlayDivider.style.display   = 'none'
+    predLabel.style.left           = '12px'
+    predLabel.style.right          = 'auto'
+  } else {
+    // overlay
+    viewerArea.classList.add('overlay-mode')
+    paneLeft.style.flex            = ''
+    paneRight.style.flex           = ''
+    splitHandle.style.display      = 'none'
+    overlayDivider.style.display   = 'block'
+    predLabel.style.left           = 'auto'
+    predLabel.style.right          = '12px'
+    setOverlayClip(overlayFrac)
+  }
+}
+
+overlayDivider.addEventListener('mousedown', (e) => {
+  overlayDragging = true
+  e.preventDefault()
+})
+
+document.addEventListener('mousemove', (e) => {
+  if (!overlayDragging) return
+  const rect = viewerArea.getBoundingClientRect()
+  setOverlayClip((e.clientX - rect.left) / rect.width)
+})
+
+document.addEventListener('mouseup', () => { overlayDragging = false })
+
+overlayDivider.addEventListener('touchstart', (e) => {
+  overlayDragging = true
+  e.preventDefault()
+}, { passive: false })
+
+document.addEventListener('touchmove', (e) => {
+  if (!overlayDragging) return
+  const rect = viewerArea.getBoundingClientRect()
+  setOverlayClip((e.touches[0].clientX - rect.left) / rect.width)
+}, { passive: true })
+
+document.addEventListener('touchend', () => { overlayDragging = false })
 
 // ─── Button group helper ──────────────────────────────────────────────────────
 
@@ -128,7 +177,6 @@ function initBtnGroup(containerId, stateKey, onChange) {
     if (!btn) return
     const val = btn.dataset.value
     if (state[stateKey] === val) return
-
     container.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active'))
     btn.classList.add('active')
     state[stateKey] = val
@@ -136,23 +184,15 @@ function initBtnGroup(containerId, stateKey, onChange) {
   })
 }
 
-// ─── Controls init ────────────────────────────────────────────────────────────
+// ─── Controls ─────────────────────────────────────────────────────────────────
 
 initBtnGroup('forest-btns', 'forest', () => {
-  currentGtUrl = null
-  currentPredUrl = null
+  currentGtUrl = null; currentPredUrl = null
   loadBoth()
 })
 
-initBtnGroup('training-btns', 'training', () => {
-  currentPredUrl = null
-  loadPrediction()
-})
-
-initBtnGroup('feature-btns', 'feature', () => {
-  currentPredUrl = null
-  loadPrediction()
-})
+initBtnGroup('training-btns', 'training', () => { currentPredUrl = null; loadPrediction() })
+initBtnGroup('feature-btns',  'feature',  () => { currentPredUrl = null; loadPrediction() })
 
 document.getElementById('model-select').addEventListener('change', (e) => {
   state.model = e.target.value
@@ -160,19 +200,18 @@ document.getElementById('model-select').addEventListener('change', (e) => {
   loadPrediction()
 })
 
-// Classification filter
+initBtnGroup('mode-btns', 'viewMode', (mode) => applyViewMode(mode))
+
 document.querySelectorAll('.cls-check').forEach(cb => {
   cb.addEventListener('change', () => {
     const code = Number(cb.dataset.code)
     if (cb.checked) state.visibleClasses.add(code)
     else state.visibleClasses.delete(code)
-
     v1.setVisibleClasses(state.visibleClasses)
     v2.setVisibleClasses(state.visibleClasses)
   })
 })
 
-// Point size
 const ptSizeInput = document.getElementById('pt-size')
 const ptSizeVal   = document.getElementById('pt-size-val')
 ptSizeInput.addEventListener('input', () => {
@@ -182,24 +221,22 @@ ptSizeInput.addEventListener('input', () => {
   v2.setPointSize(state.pointSize)
 })
 
-// Split direction
 initBtnGroup('split-btns', 'splitDir', (dir) => {
-  viewerArea.className = dir === 'vertical' ? 'split-vertical' : 'split-horizontal'
-  splitHandle.style.cursor = dir === 'vertical' ? 'col-resize' : 'row-resize'
-  // Reset to 50/50
-  paneLeft.style.flex  = '1 1 0'
-  paneRight.style.flex = '1 1 0'
+  viewerArea.classList.toggle('split-vertical',   dir === 'vertical')
+  viewerArea.classList.toggle('split-horizontal', dir === 'horizontal')
+  if (state.viewMode === 'split') {
+    splitHandle.style.cursor = dir === 'vertical' ? 'col-resize' : 'row-resize'
+    paneLeft.style.flex  = '1 1 0'
+    paneRight.style.flex = '1 1 0'
+  }
 })
 
 // ─── Resizable split handle ───────────────────────────────────────────────────
 
-let dragging = false
-let startPos = 0
-let startLeft = 0
-let startRight = 0
+let splitDragging = false, startPos = 0, startLeft = 0, startRight = 0
 
 splitHandle.addEventListener('mousedown', (e) => {
-  dragging = true
+  splitDragging = true
   splitHandle.classList.add('dragging')
   const isV = state.splitDir === 'vertical'
   startPos   = isV ? e.clientX : e.clientY
@@ -209,47 +246,37 @@ splitHandle.addEventListener('mousedown', (e) => {
 })
 
 document.addEventListener('mousemove', (e) => {
-  if (!dragging) return
-  const isV = state.splitDir === 'vertical'
-  const cur = isV ? e.clientX : e.clientY
-  const delta = cur - startPos
-  const newLeft  = Math.max(100, startLeft + delta)
-  const newRight = Math.max(100, startRight - delta)
-  paneLeft.style.flex  = `0 0 ${newLeft}px`
-  paneRight.style.flex = `0 0 ${newRight}px`
+  if (!splitDragging) return
+  const isV  = state.splitDir === 'vertical'
+  const delta = (isV ? e.clientX : e.clientY) - startPos
+  paneLeft.style.flex  = `0 0 ${Math.max(100, startLeft  + delta)}px`
+  paneRight.style.flex = `0 0 ${Math.max(100, startRight - delta)}px`
 })
 
 document.addEventListener('mouseup', () => {
-  if (dragging) {
-    dragging = false
-    splitHandle.classList.remove('dragging')
-  }
+  if (splitDragging) { splitDragging = false; splitHandle.classList.remove('dragging') }
 })
 
-// Touch support for split handle
 splitHandle.addEventListener('touchstart', (e) => {
-  const t = e.touches[0]
-  const isV = state.splitDir === 'vertical'
-  dragging  = true
-  startPos  = isV ? t.clientX : t.clientY
+  const t = e.touches[0], isV = state.splitDir === 'vertical'
+  splitDragging = true
+  startPos   = isV ? t.clientX : t.clientY
   startLeft  = isV ? paneLeft.offsetWidth  : paneLeft.offsetHeight
   startRight = isV ? paneRight.offsetWidth : paneRight.offsetHeight
   e.preventDefault()
 }, { passive: false })
 
 document.addEventListener('touchmove', (e) => {
-  if (!dragging) return
-  const t = e.touches[0]
-  const isV = state.splitDir === 'vertical'
-  const cur = isV ? t.clientX : t.clientY
-  const delta = cur - startPos
-  paneLeft.style.flex  = `0 0 ${Math.max(100, startLeft + delta)}px`
+  if (!splitDragging) return
+  const t = e.touches[0], isV = state.splitDir === 'vertical'
+  const delta = (isV ? t.clientX : t.clientY) - startPos
+  paneLeft.style.flex  = `0 0 ${Math.max(100, startLeft  + delta)}px`
   paneRight.style.flex = `0 0 ${Math.max(100, startRight - delta)}px`
 }, { passive: true })
 
-document.addEventListener('touchend', () => { dragging = false })
+document.addEventListener('touchend', () => { splitDragging = false })
 
-// ─── EDL controls ────────────────────────────────────────────────────────────
+// ─── EDL controls ─────────────────────────────────────────────────────────────
 
 const edlToggle   = document.getElementById('edl-toggle')
 const edlStrInput = document.getElementById('edl-strength')
@@ -258,38 +285,20 @@ const edlStrVal   = document.getElementById('edl-str-val')
 const edlRadVal   = document.getElementById('edl-rad-val')
 
 function applyEdl() {
-  const on  = edlToggle.checked
-  const str = Number(edlStrInput.value)
-  const rad = Number(edlRadInput.value)
-  for (const v of [v1, v2]) {
-    v.setEdlEnabled(on)
-    v.setEdlStrength(str)
-    v.setEdlRadius(rad)
-  }
+  const on = edlToggle.checked, str = Number(edlStrInput.value), rad = Number(edlRadInput.value)
+  for (const v of [v1, v2]) { v.setEdlEnabled(on); v.setEdlStrength(str); v.setEdlRadius(rad) }
 }
 
 edlToggle.addEventListener('change', applyEdl)
-
-edlStrInput.addEventListener('input', () => {
-  edlStrVal.textContent = edlStrInput.value
-  applyEdl()
-})
-
-edlRadInput.addEventListener('input', () => {
-  edlRadVal.textContent = edlRadInput.value
-  applyEdl()
-})
-
+edlStrInput.addEventListener('input', () => { edlStrVal.textContent = edlStrInput.value; applyEdl() })
+edlRadInput.addEventListener('input', () => { edlRadVal.textContent = edlRadInput.value; applyEdl() })
 applyEdl()
 
 // ─── Reset view ───────────────────────────────────────────────────────────────
 
-document.getElementById('reset-view').addEventListener('click', () => {
-  v1.resetView()
-  v2.resetView()
-})
+document.getElementById('reset-view').addEventListener('click', () => { v1.resetView(); v2.resetView() })
 
-// ─── Double-click to set orbit center ────────────────────────────────────────
+// ─── Double-click pivot ───────────────────────────────────────────────────────
 
 canvasGt.addEventListener('dblclick',   (e) => v1.focusAtScreenPoint(e.clientX, e.clientY))
 canvasPred.addEventListener('dblclick', (e) => v2.focusAtScreenPoint(e.clientX, e.clientY))
@@ -300,18 +309,13 @@ const helpModal = document.getElementById('help-modal')
 const helpClose = document.getElementById('help-close')
 const helpBtn   = document.getElementById('help-btn')
 
-function closeHelp() {
-  helpModal.classList.add('hidden')
-  localStorage.setItem('helpSeen', '1')
-}
+function closeHelp() { helpModal.classList.add('hidden'); localStorage.setItem('helpSeen', '1') }
 
 helpClose.addEventListener('click', closeHelp)
 helpModal.addEventListener('click', (e) => { if (e.target === helpModal) closeHelp() })
 helpBtn.addEventListener('click', () => helpModal.classList.remove('hidden'))
 
-if (localStorage.getItem('helpSeen')) {
-  helpModal.classList.add('hidden')
-}
+if (localStorage.getItem('helpSeen')) helpModal.classList.add('hidden')
 
 // ─── Initial load ─────────────────────────────────────────────────────────────
 

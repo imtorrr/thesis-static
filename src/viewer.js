@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { EdlPass } from './edl.js'
 
-const BG_COLOR = new THREE.Color(0x0f1117)
+const BG_COLOR = new THREE.Color(0x2B2622)
 
 class Viewer {
   constructor(canvas) {
